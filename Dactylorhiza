@@ -1,0 +1,174 @@
+#loading library
+library(digest)
+library(devtools)
+library(corrr)
+library(ggcorrplot)
+library(FactoMineR)
+library(factoextra)
+library(ggbiplot)
+library(knitr) #for sharing this script and images as PDF report
+#based on the dataset provided, I would consider conducting a PCA analysis
+#as there are quite a large number of variables containing continuous data
+dactyl <- read.csv("Dactylorhiza.csv", header = T, row.names = 2)
+str(dactyl)
+dactyl$Species <- as.factor(dactyl$Species)
+
+#check for null values
+colSums(is.na(dactyl)) # no null values detected
+
+#next, let's normalize the data. First, I'll make a new data object
+#containing only numerical data
+numerical_data <- dactyl[,2:29]
+
+head(numerical_data)
+#we have successfully defined our matrix for subsequent analysis. Next,
+# let's normalize.
+data_normalized <- scale(numerical_data)
+head(data_normalized)
+
+#I shall now compute the correlation matrix and visualize this.
+corr_matrix <- cor(data_normalized)
+ggcorrplot(corr_matrix) #beautiful, if I may say so myself...
+# so the results of this correlation matrix can be interpreted as follow: 
+#The higher the value, the most positively correlated the two variables are.
+#The closer the value to -1, the most negatively correlated they are.
+
+#Right, now let's get into the meat and potatoes: the PCA itself!
+data.pca <- princomp(corr_matrix)
+summary(data.pca)
+
+#fantastic! The main focus is on the "cumulative proportion row. It seems
+#that the first 4 PCs account for ~92% of the total variance.
+
+#let's explore how they relate to each column using the loadings of each principal component. 
+data.pca$loadings[, 1:4] # although its complicated, we can see that, for
+#example, PC 1 has high values for Trait_14 and _16, but strongly negative
+#for Trait_24.
+
+#Moving on, let's do more visualizations. Time for a scree plot.
+fviz_eig(data.pca, addlabels = TRUE) #The percentages of total variances
+#can be more clearly seen here.
+
+#let's not fit a biplot to graph the variables
+fviz_pca_var(data.pca, col.var = "black") #very interesting.
+# From this, we know that:
+#all the variables that are grouped together are positively correlated to each other.
+#For instance, Traits _10, _11, _16 have a positive correlation to each other.
+#This result is unsurprising because they have the highest values in the 
+#loading matrix with respect to the first principal component.
+# Moreover, the higher the distance between the variable and the origin, the 
+#better represented that variable is. For example, Trait_16, _8, and 11 
+# have higher magnitude compared to Trait_28.
+#Finally, variables that are negatively correlated are displayed to the opposite sides 
+#of the biplot’s origin, e.g., Trait_24 and _21. 
+
+#let's look further at the contribution of each variable with respect to
+#the first two principal components
+fviz_cos2(data.pca, choice = "var", axes = 1:2)
+#From this, it can be seen that Traits _24, _16, _14, and _10 ontribute
+#most to PC1 and 2.
+
+#let's combine this in the biplot.
+fviz_pca_var(data.pca, col.var = "cos2",
+             gradient.cols = c("black", "orange", "green"),
+             repel = TRUE)
+
+#As can be seen by the color gradient, with green representing highest cos2
+#attributes, Traits_10, 11 and _16 are bright green, whereas Traits _1, and 
+#_3 are black (lowest cos2 attributes)
+
+#Let's look at an alternative route we could take to investigate this dataset
+pairs(numerical_data, cex=0.8, pch=21, bg=c("blue","green", "red")[dactyl$Species])
+cor(numerical_data, use="complete.obs", method="pearson")
+pca.dactyl = prcomp(numerical_data, center=T, scale.=T)
+pca.dactyl #s.d and eigenvectors --> Show which variables contribute 
+#most to each component (eigenvectors of which elements are loadings).
+#eigenvectors needed for interpretation of the data.
+eigenvalues = pca.dactyl$sdev^2 #amount of variance explained per PC
+eigenvalues #amount of variance of the data along the principal axes; one eigenvalue per PC
+sum(eigenvalues)  #total amount of variation of the variables; sum eigenvectors = total variability
+summary(pca.dactyl)  # Shows how much variance is explained by the different principal components (in proportions)
+screeplot(pca.dactyl, main = "Scree plot", type="lines") ##PC1, PC2, and PC3 are important, rest not that important
+
+plot(pca.dactyl$x[,c(1,2)],col ="black", cex=1) #pca.dactyl$x contains the scores --> position on graph per object (F=U*Yc)
+plot(pca.dactyl$x[,c(1,3)],col ="black", cex=1)
+plot(pca.dactyl$x[,c(2,3)],col ="black", cex=1)
+
+# Different color for each group: blue=D. majalis, green=D. fuchsii
+# use the Ploidy column of the asternew dataset, because pca.aster uses the dataset without the NA point 
+levels(dactyl$Species) #check the order of the factor to interpret colours
+plot(pca.dactyl$x[,c(1,2)], pch=21,bg=c("blue","green", "red")[dactyl$Species],cex=1)
+legend("topleft",c("D. fuchsii ", "D. majalis", "Intermediate"), fill=c("blue","green", "red"))
+#If we want to add IDs (although it clutters the figure):
+text(pca.dactyl$x[,c(1,2)], row.names(dactyl), pos=3) #add ID's of objects; 
+#pos=3 meansadding the text above the coordinates
+
+#assessing clustering of species between different PCs
+plot(pca.dactyl$x[,c(1,3)], pch=21,bg=c("blue","green","red")[dactyl$Species],cex=1)
+plot(pca.dactyl$x[,c(2,3)], pch=21,bg=c("blue","green","red")[dactyl$Species],cex=1)
+plot(pca.dactyl$x[,c(1,4)], pch=21,bg=c("blue","green","red")[dactyl$Species],cex=1)
+plot(pca.dactyl$x[,c(2,4)], pch=21,bg=c("blue","green","red")[dactyl$Species],cex=1)
+plot(pca.dactyl$x[,c(3,4)], pch=21,bg=c("blue","green","red")[dactyl$Species],cex=1)
+
+#It would seem D. fuchsii is associated with negative variables of the PC1 axis.
+# D. majalis seems to be associated with negative variables of PC2 axis.
+####compare graph with the loadings (eigenvectors) to check which 
+#original variables contribute most to the variability on the axes:
+pca.dactyl
+
+#let's use base R biplot function next.
+biplot(pca.dactyl, scale=0)           # Distance biplot - distances among objects are ~ Euclidian (cfr PCAplot above)
+biplot(pca.dactyl, pc.biplot=TRUE) 
+
+# now let's see ggbiplot() in action.
+g <- ggbiplot(pca.dactyl, obs.scale = 1, var.scale = 1, groups = dactyl$Species, ellipse = TRUE, circle = FALSE); 
+g <- g + scale_color_discrete(name ='');
+g <- g + theme(legend.direction = 'horizontal', legend.position = "top");
+g; #We can more clearly see distinctions between the 
+# different species. For example, 
+#D. majalis is more associated with Traits_15, _11, _10
+
+
+fviz_pca(pca.dactyl)#with biplot
+fviz_pca_ind(pca.dactyl)#without biplot
+fviz_pca_ind(pca.dactyl, habillage=dactyl$Species, invisible="quali", geom= c ("point", "text"), 
+             pointsize=2, labelsize=4)#different colours for different groups
+#the argument invisible=quali is to remove the mean point for each habillage that is generated
+fviz_pca_ind(pca.dactyl, axes = c(1,2), habillage=dactyl$Species, invisible="quali", label="var",
+             addEllipses=T, ellipse.type="convex",title="PCA dactyl", 
+             palette=c("blue","green","red"))
+fviz_pca(pca.dactyl, axes = c(1,2), habillage=dactyl$Species, invisible="quali", label="var",
+         addEllipses=T, ellipse.type="convex",title="PCA dactyl", 
+         palette=c("blue","green","red"))
+# habillage: convex hulls around groups
+#axes: define which PC axes to visualise
+fviz_pca_ind(pca.dactyl, axes = c(1,3), habillage=dactyl$Species, invisible="quali", label="var",
+             addEllipses=T, ellipse.type="convex",title="PCA dactyl", 
+             palette=c("blue","green","red"))
+
+#finally, let's statistically prove that the intermediates are hybrids 
+#by  performing a one-way ANVA on the PCA scores of the individuals.
+
+hist(pca.dactyl$x[,1])        # Check whether your variables are normally distributed (to perform following analyses)
+shapiro.test(pca.dactyl$x[,1]) # W value well above 0.9.
+hist(pca.dactyl$x[,2])
+shapiro.test(pca.dactyl$x[,2])
+library(car)
+library(afex)
+set_sum_contrasts()
+dactyl.pc=cbind(dactyl, pca.dactyl$x[,1:4]) # Adding the first four PCs to the original dataset
+str(dactyl.pc)
+mod1=lm(PC1~Species,data=dactyl.pc)
+View(dactyl.pc)
+summary(mod1)#The relationship between pc1 and the presence/absence of fish is significant
+Anova(mod1, type="III")
+plot(dactyl.pc$Species,dactyl.pc$PC1, xlab="Species", ylab="PC1")
+
+#The relationship between pc1 and species is significant
+
+mod2=lm(PC2~Species,data=dactyl.pc)
+summary(mod2)  
+Anova(mod2, type="III")
+plot(dactyl.pc$Species,dactyl.pc$PC2,  xlab="Species", ylab="PC2")
+
+knitr::stitch('PCA analysis of Dactylorhiza species.r')
