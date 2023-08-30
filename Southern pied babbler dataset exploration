@@ -1,0 +1,59 @@
+babbler <- read.csv("Babbler_Dataset.csv", header = T)
+library(car)
+library(rockchalk)
+library(lmtest)
+library(effects)
+library(MuMIn)
+library(afex)
+library(emmeans)
+library(dplyr)
+library(nlme)
+library(lme4)
+library(ggplot2)
+
+str(babbler)
+#My aim is to assess how sex and age affect general cognitive performance
+#(GCP) in Southern pied babblers
+
+# Exclude birds with unknown sex
+babbler <- babbler[babbler$SEX != "U", ]
+babbler <- babbler %>% mutate_if(is.character,as.factor)
+set_sum_contrasts()
+#basic visualizations
+plot(GCP ~ SEX, data = babbler)
+plot(GCP ~ AGE, data = babbler)
+#Right, let's fit some linear models
+fit <- lm(GCP ~ SEX + AGE, data = babbler)
+fit1 <- lm(GCP ~ SEX * AGE, data = babbler)
+fit2 <- lmer(GCP ~ SEX + AGE +(1|GROUP_ID), data = babbler)
+fit3 <- lmer(GCP ~ SEX * AGE + (1|GROUP_ID), data = babbler)
+
+#lets look at the summary calls
+summary(fit) #Neither SEX nor AGE have significant effect on GCP in this model.
+summary(fit1) #Same here. Interaction has no effect either.
+summary(fit2) #With the random term, now AGE is statistically significant. 
+#With each increase in unit age, the GCP declines by ~0.12, p = 0.04.
+summary(fit3) #Being male now has an effect on GCP. What's more, the effect
+#of age on GCP is not significant now, but it is when interaction with sex
+
+AICc(fit, fit1, fit2, fit3) #fit2 seems to have the lowest AICc score.
+
+plot(allEffects(fit2))
+
+#let's test assumptions
+#normality of residuals - Shapiro Wilk test)
+shapiro.test(residuals(fit2)) # W above 0.9. 
+#Checking homogeneity of variances is difficult – no standard packages.
+#Will skip this test for this example.
+
+#outliers
+outlierTest(fit2)
+influenceIndexPlot(fit2,vars=c("Studentized","Bonf"))
+#Influential observations
+cd <- cooks.distance(fit2)
+inflobs=which(cd>1);inflobs #no influential observations
+
+#based on my investigations, I would conclude that fit2 is the best model
+#with the lowest AICc score. It does not go against any of the assumptions
+#that I have tested here, although further analysis would be needed.
+#It seems AGE has a negative effect on GCP, but sex does not.
